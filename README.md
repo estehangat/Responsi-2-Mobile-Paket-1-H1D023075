@@ -1,4 +1,4 @@
-# Inventaris Komputer SuperDaiva
+# Responsi 2 Mobile Paket 1
 
 ```
 Nama      : Daiva Paundra Gevano
