@@ -1,6 +1,14 @@
 # Inventaris Komputer SuperDaiva
 
-Aplikasi Flutter untuk mencatat inventaris barang kategori Komputer di supermarket SuperDaiva.
+```
+Nama      : Daiva Paundra Gevano
+NIM       : H1D023075
+Shift     : A
+Shift KRS : F
+```
+
+## Demo Aplikasi
+https://github.com/user-attachments/assets/71907110-1dab-4cf3-9033-afe8ee93ea1d
 
 ## Fitur Utama
 
@@ -155,7 +163,7 @@ Autentikasi user dan mendapatkan token JWT.
   "user": {
     "id": 1,
     "username": "daiva",
-    "email": "daiva@email.com"
+    "email": "daiva@admin.com"
   }
 }
 ```
@@ -195,9 +203,9 @@ Mengambil semua data inventaris milik user yang sedang login.
 [
   {
     "id": 1,
-    "nama": "Laptop ASUS ROG",
+    "nama": "Laptop",
     "harga": 15000000,
-    "jumlah": 5,
+    "jumlah": 12,
     "tanggal_masuk": "2024-12-01",
     "user_id": 1,
     "created_at": "2024-12-01T10:00:00.000Z",
@@ -222,9 +230,9 @@ Mengambil detail satu inventaris berdasarkan ID.
 ```json
 {
   "id": 1,
-  "nama": "Laptop ASUS ROG",
+  "nama": "Laptop",
   "harga": 15000000,
-  "jumlah": 5,
+  "jumlah": 12,
   "tanggal_masuk": "2024-12-01",
   "user_id": 1,
   "created_at": "2024-12-01T10:00:00.000Z",
@@ -264,9 +272,9 @@ Menambahkan data inventaris baru.
 **Contoh Request:**
 ```json
 {
-  "nama": "Monitor LG 24 inch",
-  "harga": 2500000,
-  "jumlah": 10,
+  "nama": "Laptop",
+  "harga": 15000000,
+  "jumlah": 12,
   "tanggal_masuk": "2024-12-06"
 }
 ```
@@ -277,9 +285,9 @@ Menambahkan data inventaris baru.
   "message": "Data berhasil ditambahkan",
   "data": {
     "id": 2,
-    "nama": "Monitor LG 24 inch",
-    "harga": 2500000,
-    "jumlah": 10,
+    "nama": "Laptop",
+    "harga": 15000000,
+    "jumlah": 12,
     "tanggal_masuk": "2024-12-06",
     "user_id": 1,
     "created_at": "2024-12-06T10:00:00.000Z",
@@ -317,9 +325,9 @@ Mengupdate data inventaris yang sudah ada.
   "message": "Data berhasil diupdate",
   "data": {
     "id": 1,
-    "nama": "Laptop ASUS ROG (Updated)",
-    "harga": 16000000,
-    "jumlah": 3,
+    "nama": "Laptop",
+    "harga": 18000000,
+    "jumlah": 12,
     "tanggal_masuk": "2024-12-01",
     "user_id": 1,
     "created_at": "2024-12-01T10:00:00.000Z",
@@ -651,9 +659,3 @@ Backend API menggunakan Express.js dengan JSON file storage.
 | cors | ^2.8.5 | Mengaktifkan Cross-Origin requests |
 | bcryptjs | ^2.4.3 | Hash password dengan algoritma bcrypt |
 | jsonwebtoken | ^9.0.2 | Generate dan verifikasi JWT token |
-
----
-
-**Dibuat oleh:** Daiva  
-**Nama Aplikasi:** SuperDaiva  
-**NIM:** H1D023075
