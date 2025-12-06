@@ -382,33 +382,62 @@ Menghapus data inventaris.
 
 Model untuk merepresentasikan data inventaris komputer.
 
+### Struktur Class:
 ```dart
 class Inventaris {
-  final int? id;           // ID unik inventaris (nullable untuk data baru)
-  final String nama;       // Nama barang komputer
-  final int harga;         // Harga per unit
-  final int jumlah;        // Jumlah stok
+  final int? id;             // ID unik (nullable untuk data baru)
+  final String nama;         // Nama barang komputer
+  final int harga;           // Harga per unit
+  final int jumlah;          // Jumlah stok
   final String tanggalMasuk; // Tanggal masuk barang
-  final int? userId;       // ID user pemilik data
-  final String? createdAt; // Timestamp dibuat
-  final String? updatedAt; // Timestamp diupdate
+  final int? userId;         // ID user pemilik
+  final String? createdAt;   // Timestamp dibuat
+  final String? updatedAt;   // Timestamp diupdate
 }
 ```
 
-**Fungsi-fungsi:**
+### Fungsi fromJson - Konversi JSON ke Object:
+```dart
+factory Inventaris.fromJson(Map<String, dynamic> json) {
+  return Inventaris(
+    id: json['id'],
+    nama: json['nama'],
+    harga: json['harga'],
+    jumlah: json['jumlah'],
+    tanggalMasuk: json['tanggal_masuk'],
+    userId: json['user_id'],
+    createdAt: json['created_at'],
+    updatedAt: json['updated_at'],
+  );
+}
+```
+**Penjelasan:** Factory constructor yang mengkonversi response JSON dari API menjadi objek Inventaris.
+
+### Fungsi toJson - Konversi Object ke JSON:
+```dart
+Map<String, dynamic> toJson() {
+  return {
+    'nama': nama,
+    'harga': harga,
+    'jumlah': jumlah,
+    'tanggal_masuk': tanggalMasuk,
+  };
+}
+```
+**Penjelasan:** Mengkonversi objek Inventaris menjadi Map untuk dikirim ke API saat create/update.
+
+### Fungsi Lainnya:
 
 | Fungsi | Penjelasan |
 |--------|------------|
 | `Inventaris()` | Constructor untuk membuat objek Inventaris dengan parameter required |
-| `fromJson(Map<String, dynamic> json)` | Factory constructor untuk mengkonversi JSON dari API menjadi objek Inventaris |
-| `toJson()` | Mengkonversi objek Inventaris menjadi Map untuk dikirim ke API |
 | `hargaFormatted` | Getter untuk format harga ke format Rupiah (Rp 15.000.000) |
 | `totalNilai` | Getter untuk menghitung total nilai (harga × jumlah) |
 | `totalNilaiFormatted` | Getter untuk format total nilai ke Rupiah |
 
 ---
 
-## 2. Model User (`lib/models/user.dart`)
+## 1.2 Model User (`lib/models/user.dart`)
 
 Model untuk merepresentasikan data user.
 
@@ -420,8 +449,6 @@ class User {
 }
 ```
 
-**Fungsi-fungsi:**
-
 | Fungsi | Penjelasan |
 |--------|------------|
 | `User()` | Constructor untuk membuat objek User |
@@ -430,11 +457,183 @@ class User {
 
 ---
 
-## 3. API Service (`lib/services/api_service.dart`)
+## 2. API Service (`lib/services/api_service.dart`)
 
-Service class untuk menangani semua komunikasi dengan backend API.
+Service class untuk komunikasi dengan backend API.
 
-### Fungsi Authentication:
+### Fungsi Login:
+```dart
+static Future<Map<String, dynamic>> login(String email, String password) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      await saveToken(data['token']);
+      await saveUser(User.fromJson(data['user']));
+      return {'success': true, 'message': data['message']};
+    } else {
+      return {'success': false, 'message': data['error'] ?? 'Login gagal'};
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'Tidak dapat terhubung ke server'};
+  }
+}
+```
+**Penjelasan:** Mengirim POST request ke `/api/login`, jika berhasil menyimpan token dan data user ke SharedPreferences.
+
+### Fungsi Register:
+```dart
+static Future<Map<String, dynamic>> register(
+  String username, String email, String password) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': username,
+        'email': email,
+        'password': password,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 201) {
+      return {'success': true, 'message': data['message']};
+    } else {
+      return {'success': false, 'message': data['error'] ?? 'Registrasi gagal'};
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'Tidak dapat terhubung ke server'};
+  }
+}
+```
+**Penjelasan:** Mengirim data registrasi ke API dan mengembalikan status berhasil/gagal.
+
+### Fungsi Get All Inventaris:
+```dart
+static Future<List<Inventaris>> getInventaris() async {
+  try {
+    final token = await getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/inventaris'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => Inventaris.fromJson(json)).toList();
+    } else {
+      throw Exception('Gagal mengambil data inventaris');
+    }
+  } catch (e) {
+    throw Exception('Tidak dapat terhubung ke server');
+  }
+}
+```
+**Penjelasan:** Mengambil semua data inventaris dari API dengan menyertakan Bearer token untuk autentikasi.
+
+### Fungsi Create Inventaris:
+```dart
+static Future<Map<String, dynamic>> createInventaris(Inventaris inventaris) async {
+  try {
+    final token = await getToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/inventaris'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(inventaris.toJson()),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 201) {
+      return {
+        'success': true,
+        'message': data['message'],
+        'data': Inventaris.fromJson(data['data']),
+      };
+    } else {
+      return {'success': false, 'message': data['error'] ?? 'Gagal menambahkan data'};
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'Tidak dapat terhubung ke server'};
+  }
+}
+```
+**Penjelasan:** Mengirim POST request untuk menambah inventaris baru dengan data dari objek Inventaris.
+
+### Fungsi Update Inventaris:
+```dart
+static Future<Map<String, dynamic>> updateInventaris(int id, Inventaris inventaris) async {
+  try {
+    final token = await getToken();
+    final response = await http.put(
+      Uri.parse('$baseUrl/inventaris/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(inventaris.toJson()),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'message': data['message'],
+        'data': Inventaris.fromJson(data['data']),
+      };
+    } else {
+      return {'success': false, 'message': data['error'] ?? 'Gagal mengupdate data'};
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'Tidak dapat terhubung ke server'};
+  }
+}
+```
+**Penjelasan:** Mengirim PUT request untuk mengupdate inventaris berdasarkan ID.
+
+### Fungsi Delete Inventaris:
+```dart
+static Future<Map<String, dynamic>> deleteInventaris(int id) async {
+  try {
+    final token = await getToken();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/inventaris/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': data['message']};
+    } else {
+      return {'success': false, 'message': data['error'] ?? 'Gagal menghapus data'};
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'Tidak dapat terhubung ke server'};
+  }
+}
+```
+**Penjelasan:** Mengirim DELETE request untuk menghapus inventaris berdasarkan ID.
+
+### Fungsi Lainnya:
 
 | Fungsi | Penjelasan |
 |--------|------------|
@@ -444,77 +643,147 @@ Service class untuk menangani semua komunikasi dengan backend API.
 | `getUser()` | Mengambil data user yang tersimpan dan mengkonversi ke objek User |
 | `logout()` | Menghapus token dan data user dari SharedPreferences |
 | `isLoggedIn()` | Mengecek apakah user sudah login (token ada atau tidak) |
-| `register(username, email, password)` | Mengirim request POST ke /api/register untuk mendaftarkan user baru |
-| `login(email, password)` | Mengirim request POST ke /api/login, menyimpan token dan user jika berhasil |
-
-### Fungsi CRUD Inventaris:
-
-| Fungsi | Penjelasan |
-|--------|------------|
-| `getInventaris()` | Mengambil semua data inventaris user dengan GET request, return List<Inventaris> |
 | `getInventarisById(int id)` | Mengambil detail satu inventaris dengan GET request berdasarkan ID |
-| `createInventaris(Inventaris)` | Menambah inventaris baru dengan POST request |
-| `updateInventaris(int id, Inventaris)` | Mengupdate inventaris dengan PUT request |
-| `deleteInventaris(int id)` | Menghapus inventaris dengan DELETE request |
 
 ---
 
-## 4. Halaman Login (`lib/pages/login_page.dart`)
+## 3. Halaman Login (`lib/pages/login_page.dart`)
 
-Halaman untuk user melakukan login ke aplikasi.
+### Fungsi _login - Proses Login:
+```dart
+Future<void> _login() async {
+  if (_formKey.currentState!.validate()) {
+    setState(() => _isLoading = true);
 
-**State Variables:**
-- `_formKey` - GlobalKey untuk validasi form
-- `_emailController` - Controller untuk input email
-- `_passwordController` - Controller untuk input password
-- `_isLoading` - Status loading saat proses login
-- `_obscurePassword` - Toggle visibility password
+    final result = await ApiService.login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-**Fungsi-fungsi:**
+    setState(() => _isLoading = false);
 
-| Fungsi | Penjelasan |
-|--------|------------|
+    if (result['success']) {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const InventarisListPage()),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+}
+```
+**Penjelasan:** Validasi form, panggil API login, jika berhasil navigasi ke halaman list, jika gagal tampilkan snackbar error.
+
+### Komponen dan State:
+
+| Komponen/State | Penjelasan |
+|----------------|------------|
+| `_formKey` | GlobalKey untuk validasi form |
+| `_emailController` | Controller untuk input email |
+| `_passwordController` | Controller untuk input password |
+| `_isLoading` | Status loading saat proses login |
+| `_obscurePassword` | Toggle visibility password |
 | `dispose()` | Membersihkan controller saat widget dihapus dari tree |
-| `_login()` | Validasi form, panggil ApiService.login(), navigasi ke halaman list jika berhasil |
 | `build()` | Membangun UI dengan form email, password, tombol login, dan link ke register |
 
 ---
 
-## 5. Halaman Register (`lib/pages/register_page.dart`)
+## 3.2 Halaman Register (`lib/pages/register_page.dart`)
 
 Halaman untuk mendaftarkan akun baru.
 
-**State Variables:**
-- `_formKey` - GlobalKey untuk validasi form
-- `_usernameController` - Controller untuk input username
-- `_emailController` - Controller untuk input email
-- `_passwordController` - Controller untuk input password
-- `_confirmPasswordController` - Controller untuk konfirmasi password
-- `_isLoading` - Status loading saat proses registrasi
-
-**Fungsi-fungsi:**
-
-| Fungsi | Penjelasan |
-|--------|------------|
+| Komponen/State | Penjelasan |
+|----------------|------------|
+| `_formKey` | GlobalKey untuk validasi form |
+| `_usernameController` | Controller untuk input username |
+| `_emailController` | Controller untuk input email |
+| `_passwordController` | Controller untuk input password |
+| `_confirmPasswordController` | Controller untuk konfirmasi password |
+| `_isLoading` | Status loading saat proses registrasi |
 | `dispose()` | Membersihkan semua controller |
 | `_register()` | Validasi form (termasuk password match), panggil ApiService.register(), kembali ke login jika berhasil |
 | `build()` | Membangun UI form registrasi dengan validasi |
 
 ---
 
-## 6. Halaman List Inventaris (`lib/pages/inventaris_list_page.dart`)
+## 4. Halaman Form Inventaris (`lib/pages/inventaris_form_page.dart`)
+
+### Fungsi _saveInventaris - Simpan Data:
+```dart
+Future<void> _saveInventaris() async {
+  if (_formKey.currentState!.validate()) {
+    setState(() => _isLoading = true);
+
+    final inventaris = Inventaris(
+      nama: _namaController.text.trim(),
+      harga: int.parse(_hargaController.text),
+      jumlah: int.parse(_jumlahController.text),
+      tanggalMasuk: _tanggalController.text,
+    );
+
+    Map<String, dynamic> result;
+    if (isEditMode) {
+      result = await ApiService.updateInventaris(widget.inventaris!.id!, inventaris);
+    } else {
+      result = await ApiService.createInventaris(inventaris);
+    }
+
+    setState(() => _isLoading = false);
+
+    if (result['success']) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message']), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context, true);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+}
+```
+**Penjelasan:** Membuat objek Inventaris dari input form, kemudian memanggil create atau update API tergantung mode (tambah/edit).
+
+### Komponen dan State:
+
+| Komponen/State | Penjelasan |
+|----------------|------------|
+| `inventaris` | Property objek Inventaris (null = mode tambah, filled = mode edit) |
+| `_formKey` | GlobalKey untuk validasi form |
+| `_namaController` | Controller untuk input nama barang |
+| `_hargaController` | Controller untuk input harga |
+| `_jumlahController` | Controller untuk input jumlah |
+| `_tanggalController` | Controller untuk input tanggal |
+| `_selectedDate` | DateTime yang dipilih |
+| `_isLoading` | Status loading |
+| `isEditMode` | Getter untuk mengecek apakah mode edit atau tambah |
+| `initState()` | Mengisi form dengan data existing jika mode edit |
+| `_selectDate()` | Menampilkan DatePicker dan update tanggal yang dipilih |
+| `build()` | Membangun UI form dengan input nama, harga, jumlah, tanggal |
+
+---
+
+## 4.2 Halaman List Inventaris (`lib/pages/inventaris_list_page.dart`)
 
 Halaman utama yang menampilkan daftar semua inventaris.
 
-**State Variables:**
-- `_inventarisList` - List untuk menyimpan data inventaris
-- `_isLoading` - Status loading saat fetch data
-- `_errorMessage` - Pesan error jika gagal fetch
-
-**Fungsi-fungsi:**
-
-| Fungsi | Penjelasan |
-|--------|------------|
+| Komponen/State | Penjelasan |
+|----------------|------------|
+| `_inventarisList` | List untuk menyimpan data inventaris |
+| `_isLoading` | Status loading saat fetch data |
+| `_errorMessage` | Pesan error jika gagal fetch |
 | `initState()` | Dipanggil saat widget dibuat, memanggil `_loadInventaris()` |
 | `_loadInventaris()` | Mengambil data inventaris dari API dan update state |
 | `_logout()` | Menampilkan dialog konfirmasi, hapus session, navigasi ke login |
@@ -523,49 +792,15 @@ Halaman utama yang menampilkan daftar semua inventaris.
 
 ---
 
-## 7. Halaman Form Inventaris (`lib/pages/inventaris_form_page.dart`)
-
-Halaman untuk menambah atau mengedit data inventaris.
-
-**Properties:**
-- `inventaris` - Objek Inventaris (null = mode tambah, filled = mode edit)
-
-**State Variables:**
-- `_formKey` - GlobalKey untuk validasi form
-- `_namaController` - Controller untuk input nama barang
-- `_hargaController` - Controller untuk input harga
-- `_jumlahController` - Controller untuk input jumlah
-- `_tanggalController` - Controller untuk input tanggal
-- `_selectedDate` - DateTime yang dipilih
-- `_isLoading` - Status loading
-
-**Fungsi-fungsi:**
-
-| Fungsi | Penjelasan |
-|--------|------------|
-| `isEditMode` | Getter untuk mengecek apakah mode edit atau tambah |
-| `initState()` | Mengisi form dengan data existing jika mode edit |
-| `_selectDate()` | Menampilkan DatePicker dan update tanggal yang dipilih |
-| `_saveInventaris()` | Validasi form, panggil create atau update API berdasarkan mode |
-| `build()` | Membangun UI form dengan input nama, harga, jumlah, tanggal |
-
----
-
-## 8. Halaman Detail Inventaris (`lib/pages/inventaris_detail_page.dart`)
+## 4.3 Halaman Detail Inventaris (`lib/pages/inventaris_detail_page.dart`)
 
 Halaman untuk melihat detail lengkap dan menghapus inventaris.
 
-**Properties:**
-- `inventaris` - Objek Inventaris yang akan ditampilkan
-
-**State Variables:**
-- `_inventaris` - Data inventaris yang bisa diupdate
-- `_isLoading` - Status loading
-
-**Fungsi-fungsi:**
-
-| Fungsi | Penjelasan |
-|--------|------------|
+| Komponen/State | Penjelasan |
+|----------------|------------|
+| `inventaris` | Property objek Inventaris yang akan ditampilkan |
+| `_inventaris` | Data inventaris yang bisa diupdate |
+| `_isLoading` | Status loading |
 | `initState()` | Inisialisasi `_inventaris` dari widget.inventaris |
 | `_deleteInventaris()` | Menampilkan dialog konfirmasi, panggil API delete, kembali ke list |
 | `_editInventaris()` | Navigasi ke form edit, reload data setelah kembali |
@@ -574,46 +809,172 @@ Halaman untuk melihat detail lengkap dan menghapus inventaris.
 
 ---
 
-## 9. Main App (`lib/main.dart`)
+## 5. API Server (`api/server.js`)
 
-Entry point dan konfigurasi utama aplikasi.
+### Middleware authenticateToken - Verifikasi JWT:
+```javascript
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-**Class MyApp:**
-- Konfigurasi MaterialApp dengan tema abu-abu
-- Setup ColorScheme, AppBarTheme, ElevatedButtonTheme
+  if (!token) {
+    return res.status(401).json({ error: 'Token tidak ditemukan' });
+  }
 
-**Class SplashScreen:**
-- Halaman splash dengan branding SuperDaiva
-- Cek status login dan navigasi ke halaman yang sesuai
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token tidak valid' });
+    }
+    req.user = user;
+    next();
+  });
+};
+```
+**Penjelasan:** Middleware yang memverifikasi JWT token dari header Authorization. Jika valid, data user disimpan di `req.user`.
 
-**Fungsi-fungsi:**
+### Route POST /api/register - Registrasi User:
+```javascript
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
 
-| Fungsi | Penjelasan |
-|--------|------------|
-| `main()` | Entry point aplikasi, menjalankan MyApp |
-| `_checkLoginStatus()` | Delay 2 detik, cek token, navigasi ke list atau login |
-| `build()` | Membangun UI splash screen dengan logo dan loading indicator |
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Semua field harus diisi' });
+    }
 
----
+    const users = readUsers();
+    
+    const existingUser = users.find(u => u.username === username || u.email === email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username atau email sudah terdaftar' });
+    }
 
-## 10. API Server (`api/server.js`)
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-Backend API menggunakan Express.js dengan JSON file storage.
+    const newUser = {
+      id: generateId(users),
+      username,
+      email,
+      password: hashedPassword,
+      created_at: new Date().toISOString()
+    };
 
-### Konfigurasi:
+    users.push(newUser);
+    writeUsers(users);
 
-| Variabel | Penjelasan |
-|----------|------------|
+    res.status(201).json({ message: 'Registrasi berhasil', userId: newUser.id });
+  } catch (error) {
+    res.status(500).json({ error: 'Terjadi kesalahan server' });
+  }
+});
+```
+**Penjelasan:** Menerima data registrasi, cek duplikat, hash password dengan bcrypt, simpan user baru ke database.
+
+### Route POST /api/login - Login User:
+```javascript
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const users = readUsers();
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Email atau password salah' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Email atau password salah' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Login berhasil',
+      token,
+      user: { id: user.id, username: user.username, email: user.email }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Terjadi kesalahan server' });
+  }
+});
+```
+**Penjelasan:** Verifikasi email dan password, jika valid generate JWT token dengan expiry 24 jam.
+
+### Route POST /api/inventaris - Create Inventaris:
+```javascript
+app.post('/api/inventaris', authenticateToken, (req, res) => {
+  try {
+    const { nama, harga, jumlah, tanggal_masuk } = req.body;
+
+    if (!nama || harga === undefined || jumlah === undefined || !tanggal_masuk) {
+      return res.status(400).json({ error: 'Semua field harus diisi' });
+    }
+
+    const allInventaris = readInventaris();
+    
+    const newInventaris = {
+      id: generateId(allInventaris),
+      nama,
+      harga,
+      jumlah,
+      tanggal_masuk,
+      user_id: req.user.id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    allInventaris.push(newInventaris);
+    writeInventaris(allInventaris);
+
+    res.status(201).json({ message: 'Data berhasil ditambahkan', data: newInventaris });
+  } catch (error) {
+    res.status(500).json({ error: 'Terjadi kesalahan server' });
+  }
+});
+```
+**Penjelasan:** Menerima data inventaris, validasi field, simpan dengan user_id dari token, return data yang baru dibuat.
+
+### Route DELETE /api/inventaris/:id - Hapus Inventaris:
+```javascript
+app.delete('/api/inventaris/:id', authenticateToken, (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const allInventaris = readInventaris();
+    
+    const index = allInventaris.findIndex(
+      item => item.id === id && item.user_id === req.user.id
+    );
+    
+    if (index === -1) {
+      return res.status(404).json({ error: 'Data tidak ditemukan' });
+    }
+
+    allInventaris.splice(index, 1);
+    writeInventaris(allInventaris);
+
+    res.json({ message: 'Data berhasil dihapus' });
+  } catch (error) {
+    res.status(500).json({ error: 'Terjadi kesalahan server' });
+  }
+});
+```
+**Penjelasan:** Cari inventaris berdasarkan ID dan user_id (ownership check), hapus dari array, simpan kembali ke file.
+
+### Konfigurasi dan Helper Functions:
+
+| Variabel/Fungsi | Penjelasan |
+|-----------------|------------|
 | `PORT` | Port server (3000) |
 | `JWT_SECRET` | Secret key untuk JWT |
 | `DB_PATH` | Path folder database |
 | `USERS_FILE` | Path file users.json |
 | `INVENTARIS_FILE` | Path file inventaris.json |
-
-### Helper Functions:
-
-| Fungsi | Penjelasan |
-|--------|------------|
 | `initDB()` | Membuat file database jika belum ada |
 | `readUsers()` | Membaca dan parse file users.json |
 | `writeUsers(data)` | Menulis data ke file users.json |
@@ -621,41 +982,24 @@ Backend API menggunakan Express.js dengan JSON file storage.
 | `writeInventaris(data)` | Menulis data ke file inventaris.json |
 | `generateId(items)` | Generate ID baru (max ID + 1) |
 
-### Middleware:
+### Route Lainnya:
 
-| Middleware | Penjelasan |
-|------------|------------|
-| `cors()` | Mengaktifkan Cross-Origin Resource Sharing |
-| `express.json()` | Parse request body sebagai JSON |
-| `authenticateToken` | Verifikasi JWT token dari header Authorization |
-
-### Route Handlers:
-
-| Route | Method | Fungsi |
-|-------|--------|--------|
-| `/api/register` | POST | Hash password dengan bcrypt, simpan user baru |
-| `/api/login` | POST | Verifikasi credentials, generate JWT token |
+| Route | Method | Penjelasan |
+|-------|--------|------------|
 | `/api/inventaris` | GET | Filter inventaris by user_id, sort by created_at DESC |
 | `/api/inventaris/:id` | GET | Cari inventaris by id dan user_id |
-| `/api/inventaris` | POST | Buat inventaris baru dengan user_id dari token |
 | `/api/inventaris/:id` | PUT | Update inventaris, cek ownership |
-| `/api/inventaris/:id` | DELETE | Hapus inventaris, cek ownership |
 
 ---
 
-## Teknologi yang Digunakan
+## 6. Main App (`lib/main.dart`)
 
-### Frontend (Flutter)
-| Package | Versi | Kegunaan |
-|---------|-------|----------|
-| http | ^1.1.0 | HTTP client untuk API calls |
-| shared_preferences | ^2.2.2 | Menyimpan token & data user secara lokal |
-| intl | ^0.19.0 | Format tanggal Indonesia |
+Entry point dan konfigurasi utama aplikasi.
 
-### Backend (Node.js)
-| Package | Versi | Kegunaan |
-|---------|-------|----------|
-| express | ^4.18.2 | Web framework untuk API |
-| cors | ^2.8.5 | Mengaktifkan Cross-Origin requests |
-| bcryptjs | ^2.4.3 | Hash password dengan algoritma bcrypt |
-| jsonwebtoken | ^9.0.2 | Generate dan verifikasi JWT token |
+| Class/Fungsi | Penjelasan |
+|--------------|------------|
+| `MyApp` | Konfigurasi MaterialApp dengan tema abu-abu, setup ColorScheme, AppBarTheme, ElevatedButtonTheme |
+| `SplashScreen` | Halaman splash dengan branding SuperDaiva, cek status login dan navigasi ke halaman yang sesuai |
+| `main()` | Entry point aplikasi, menjalankan MyApp |
+| `_checkLoginStatus()` | Delay 2 detik, cek token, navigasi ke list atau login |
+| `build()` | Membangun UI splash screen dengan logo dan loading indicator |
